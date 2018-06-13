@@ -20,10 +20,10 @@
 AM_CFLAGS=$(TRACE_CFLAGS)
 
 lib_LTLIBRARIES = libsecure_wrapper.la
-libsecure_wrapper_la_SOURCES = secure_wrapper.c
-libsecure_wrapper_la_LDFLAGS =$(TRACE_LIBS)
+libsecure_wrapper_la_SOURCES = secure_popen_wrapper.c secure_utils.c secure_system_wrapper.c
+libsecure_wrapper_la_LDFLAGS =$(TRACE_LIBS) -lrdkloggers
 
 libsecure_wrapper_la_includedir = ${includedir}
-libsecure_wrapper_la_include_HEADERS = secure_wrapper.h
+libsecure_wrapper_la_include_HEADERS = secure_wrapper.h 
 
 

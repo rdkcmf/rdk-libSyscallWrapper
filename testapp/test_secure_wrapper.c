@@ -18,8 +18,29 @@
 */
 #include <stdio.h>
 int main(int count, char *argv[]) {
-   printf("v_secure_system testing\n");
-   v_secure_system(argv[1]);
+   FILE* fptr=NULL;
+   char output[1024];
+   fptr= v_secure_popen(argv[1]);
+   printf("\n ---output---\n");
+   if (fptr  == NULL) perror ("Error opening file");
+   else
+   {
+     while ( ! feof (fptr) )
+     {
+       if ( fgets (output , 1023 , fptr) == NULL ) break;
+       printf("%s", output);
+     }
+     v_secure_pclose(fptr);
+   }
+   printf("\n\n\n");
+   if(v_secure_system(argv[1])==0)
+   {
+     printf("OK");
+   }
+   else
+   {
+     printf("NOT OK");
+   }
    printf("Testing Completed\n");
    return 0;
 }

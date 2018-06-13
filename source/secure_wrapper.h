@@ -85,7 +85,7 @@ int v_secure_system(const char* fmt, ...);
     Return:       command with prepended path 
 **********************************************************************/
 
-char* path_find(const char * arg);
+//char* path_find(const char * arg);
 
 /**********************************************************************
     prototype:
@@ -112,7 +112,7 @@ char* path_find(const char * arg);
 
 
 //Implementation of secure popen call which takes parameters as array
-char* secure_popen_call_p( const char *cmd, char *argp[]);
+//char* secure_popen_call_p( const char *cmd, char *argp[]);
 
 /**********************************************************************
     prototype:
@@ -136,7 +136,7 @@ char* secure_popen_call_p( const char *cmd, char *argp[]);
 
 
 
-char* secure_popen_call_vp( const char *cmd, ...);
+//char* secure_popen_call_vp( const char *cmd, ...);
 
 
 
