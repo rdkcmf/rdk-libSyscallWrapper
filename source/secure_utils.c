@@ -89,6 +89,19 @@ void free_arrmem2(char ** fmd_args)
     return;
 }
 
+/*
+ * The following SPC functions are taken from examples within the following
+ * book:
+ *      Secure Programming Cookbook for C and C++
+ *      by John Viega; Matt Messier
+ *      Published by O'Reilly Media, Inc., 2003
+ *      ISBN: 9780596003944
+ *      https://resources.oreilly.com/examples/9780596003944.git
+ *
+ * Permission to use is outlined in:
+ *      https://resources.oreilly.com/examples/9780596003944/blob/master/README.md
+ */
+
 pid_t spc_fork(void) {
         pid_t childpid;
 
