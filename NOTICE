@@ -1,2 +1,18 @@
 Copyright 2018 RDK Management
 Licensed under the Apache License, Version 2.0 
+
+O'Reilly Media, Inc., 2003
+
+secure_utils.c, spc_open, spc_close and spc_fork are based entirely on
+the examples in the 'Secure Programming Cookbook for C++', sections 1.6
+and 1.7.
+
+    Secure Programming Cookbook for C and C++
+    by John Viega; Matt Messier
+    Published by O'Reilly Media, Inc., 2003
+    ISBN: 9780596003944
+
+    Examples: https://resources.oreilly.com/examples/9780596003944.git
+
+    Refer to README.md file for permissions to reuse the examples:
+    https://bit.ly/2nFYrcI
