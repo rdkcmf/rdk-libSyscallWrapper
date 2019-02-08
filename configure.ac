@@ -35,7 +35,10 @@ AM_PROG_CC_C_O
 AM_PROG_LIBTOOL(libtool)
 
 TRACE_CFLAGS=" "
-TRACE_LIBS==" "
+TRACE_LIBS=" "
+
+RDKLOGGER_CFLAGS=" "
+RDKLOGGER_LIBS=" "
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
@@ -67,6 +70,15 @@ AC_ARG_ENABLE([testapp],
 
 AM_CONDITIONAL([ENABLE_TEST_APP], [test x$ENABLE_TEST_APP = xtrue])
 
+AC_ARG_WITH([rdklogger],
+            AS_HELP_STRING([--without-rdklogger], [Compile without librdklogger]))
+
+AS_IF([test "x$with_rdklogger" != "xno"],
+      [
+       RDKLOGGER_CFLAGS="-DWITH_RDKLOGGER"
+       RDKLOGGER_LIBS="-lrdkloggers"
+      ])
+
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_C_INLINE
@@ -76,6 +88,8 @@ AC_FUNC_MALLOC
 
 AC_SUBST(TRACE_CFLAGS)
 AC_SUBST(TRACE_LIBS)
+AC_SUBST(RDKLOGGER_CFLAGS)
+AC_SUBST(RDKLOGGER_LIBS)
 AC_CONFIG_FILES(
     source/Makefile
       Makefile

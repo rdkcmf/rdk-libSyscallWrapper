@@ -2,7 +2,7 @@
 # If not stated otherwise in this file or this component's Licenses.txt
 # file the following copyright and licenses apply:
 #
-# Copyright 2018 RDK Management
+# Copyright 2019 RDK Management
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,5 +18,6 @@
 ##########################################################################
 bin_PROGRAMS = testsecurewrapper
 
-LDADD = ../source/.libs/libsecure_wrapper.so
+LDADD = ../source/.libs/libsecure_wrapper.a $(RDKLOGGER_LIBS)
 testsecurewrapper_SOURCES = test_secure_wrapper.c
+testsecurewrapper_CFLAGS  = -I${top_srcdir}/source -Os -Wall -Wextra -D_FORTIFY_SOURCE=2 -std=c99 -ggdb
