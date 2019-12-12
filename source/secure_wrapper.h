@@ -30,27 +30,36 @@ int v_secure_pclose(FILE *);
  * 2) the number of arguments matches the format
  * 3) popen's direction arg is "r" or "w"
  */
+
+#if (defined (__GNUC__) && ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || defined(__clang__)
+#define PRAGMA_PUSH                \
+    _Pragma ("GCC diagnostic push")                       \
+    _Pragma ("GCC diagnostic error \"-Wformat\"")       \
+    _Pragma ("GCC diagnostic error \"-Wformat-security\"")
+#define PRAGMA_POP             \
+    _Pragma ("GCC diagnostic pop")
+#else
+#define PRAGMA_PUSH
+#define PRAGMA_POP
+#endif
+
 #define v_secure_system(fmt, args...) \
 	({ \
 		int ret; \
-		_Pragma("GCC diagnostic push") \
-		_Pragma("GCC diagnostic error \"-Wformat\"") \
-		_Pragma("GCC diagnostic error \"-Wformat-security\"") \
+                PRAGMA_PUSH; \
 		if (!__builtin_constant_p(fmt)) { \
 		extern void format_error() __attribute__((error("command argument cannot be a variable\nreplace \"sprintf(buffer, command, args); v_secure_system(buffer);\" with \"v_secure_system(command, args);\""))); \
 			format_error(); \
 		} \
 		ret = v_secure_system(fmt, ##args); \
-		_Pragma("GCC diagnostic pop") \
+                PRAGMA_POP; \
 		ret; \
 	})
 
 #define v_secure_popen(direction, fmt, args...) \
 	({ \
 		FILE *ret; \
-		_Pragma("GCC diagnostic push") \
-		_Pragma("GCC diagnostic error \"-Wformat\"") \
-		_Pragma("GCC diagnostic error \"-Wformat-security\"") \
+                PRAGMA_PUSH; \
 		if ( \
 			__builtin_constant_p(*direction) && \
 			((direction[0] != 'r' && direction[0] != 'w') || direction[1] != '\0') \
@@ -63,8 +72,8 @@ int v_secure_pclose(FILE *);
 			format_error(); \
 		} \
 		ret = v_secure_popen(direction, fmt, ##args); \
-		_Pragma("GCC diagnostic pop") \
-		ret; \
+		PRAGMA_POP; \
+                ret; \
 	})
 
 extern int system(const char *command) __attribute__((warning("please replace system() with v_secure_system()")));
