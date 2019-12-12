@@ -18,21 +18,31 @@
 ##########################################################################
 AC_PREREQ([2.65])
 AC_INIT([libsyswrapper], [1.0], [BUG-REPORT-ADDRESS])
-AM_INIT_AUTOMAKE([foreign])
+AC_CONFIG_SRCDIR([source])
+AM_CONFIG_HEADER(m4/config.h)
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_AUX_DIR([m4])
+AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-bzip2 1.9])
 LT_INIT
 
 AC_PREFIX_DEFAULT(`pwd`)
 AC_ENABLE_SHARED
 AC_DISABLE_STATIC
 
-AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_MACRO_DIR([m4])
+# dnl Checks for programs.
+AC_PROG_CXX
 
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL
-AM_PROG_CC_C_O
-AM_PROG_LIBTOOL(libtool)
+AC_PROG_LN_S
+AC_PROG_CPP
+AC_PROG_CXXCPP
+
+# dnl use pretty build output with automake >= 1.11
+m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],
+  [AM_DEFAULT_VERBOSITY=1
+   AC_SUBST(AM_DEFAULT_VERBOSITY)])
 
 TRACE_CFLAGS=" "
 TRACE_LIBS=" "
@@ -40,8 +50,18 @@ TRACE_LIBS=" "
 RDKLOGGER_CFLAGS=" "
 RDKLOGGER_LIBS=" "
 
+AC_HEADER_STDC
+
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
+
+# dnl Checks for library functions.
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([memset strdup strerror])
+
+# dnl Checks for typedefs, structures, and compiler characteristics.
+# dnl AC_CHECK_HEADER_STDBOOL
+AC_TYPE_UINT8_T
 
 AC_ARG_ENABLE([ccsptrace],
               AS_HELP_STRING([--enable-ccsptrace],[enable ccsp based tracing (default is no)]),
@@ -90,11 +110,11 @@ AC_SUBST(TRACE_CFLAGS)
 AC_SUBST(TRACE_LIBS)
 AC_SUBST(RDKLOGGER_CFLAGS)
 AC_SUBST(RDKLOGGER_LIBS)
-AC_CONFIG_FILES(
+AC_CONFIG_FILES([
     source/Makefile
       Makefile
     testapp/Makefile
-    )
+    ])
 AC_OUTPUT
 
 

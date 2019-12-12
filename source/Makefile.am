@@ -25,3 +25,6 @@ libsecure_wrapper_la_LDFLAGS =$(TRACE_LIBS) $(RDKLOGGER_LIBS)
 
 libsecure_wrapper_la_includedir = ${includedir}
 libsecure_wrapper_la_include_HEADERS = secure_wrapper.h 
+
+AM_LDFLAGS = $(GLIB_LDFLAGS) $(GLIB_LIBS) \
+	$(G_THREAD_LIBS) -lrdkloggers $(LOG4C_LIBS) -lpthread -lcjson
