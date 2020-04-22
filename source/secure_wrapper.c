@@ -49,6 +49,7 @@
 #define FAIL(msg...) ({ \
 		RDK_LOG(RDK_LOG_ERROR,LOG_LIB, msg); \
 		fprintf(stderr, msg); \
+		fflush(stderr); \
 		goto fail; \
 	})
 //#define close(fd) ({ (fd < 0) ? -1 : close(fd); })
@@ -472,7 +473,8 @@ static int execute_task(const task *current_task) {
 	}
 #endif
 
-	fflush(NULL);
+	fflush(stdout);
+	fflush(stderr);
 
 	pid_t child_pid = fork();
 	if (child_pid == -1) {
@@ -635,8 +637,13 @@ static int secure_popen_close(void *cookie) {
 
 	close(c->fd);
 
-	if (waitpid(c->pid, &ret, 0) == -1) {
+	int wstatus;
+	if (waitpid(c->pid, &wstatus, 0) == -1) {
 		fprintf(stderr, "child exited unexpectedly\n");
+	}
+
+	if (WIFEXITED(wstatus)) {
+		ret = WEXITSTATUS(wstatus);
 	}
 
 	free(cookie);
@@ -666,7 +673,8 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 		goto fail;
 	}
 
-	fflush(NULL);
+	fflush(stdout);
+	fflush(stderr);
 
 	child_pid = fork();
 	if (child_pid == -1) {
