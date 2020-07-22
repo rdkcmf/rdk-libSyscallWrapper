@@ -43,6 +43,7 @@ export RDK_TARGET_PATH=${RDK_TARGET_PATH-$RDK_SOURCE_PATH}
 # fsroot and toolchain (valid for all devices)
 export RDK_FSROOT_PATH=${RDK_FSROOT_PATH-`readlink -m $RDK_PROJECT_ROOT_PATH/sdk/fsroot/ramdisk`}
 export RDK_TOOLCHAIN_PATH=${RDK_TOOLCHAIN_PATH-`readlink -m $RDK_PROJECT_ROOT_PATH/sdk/toolchain/staging_dir`}
+export RDK_SDROOT=${RDK_PROJECT_ROOT_PATH}/sdk/fsroot/src/vendor/img/fs/shadow_root/
 
 #default component name
 export RDK_COMPONENT_NAME=${RDK_COMPONENT_NAME-`basename $RDK_SOURCE_PATH`}
@@ -139,7 +140,7 @@ function configure()
     if [ "$RDK_PLATFORM_SOC" = "stm" ];then
        ./configure --with-libtool-sysroot=${RDK_FSROOT_PATH} --prefix=/usr --sysconfdir=/etc $configure_options
     else
-       ./configure --prefix=${RDK_FSROOT_PATH}/usr --sysconfdir=${RDK_FSROOT_PATH}/etc $configure_options
+       ./configure --prefix=${RDK_SDROOT}/usr --sysconfdir=${RDK_SDROOT}/etc $configure_options
     fi
     cd $pd
 }
