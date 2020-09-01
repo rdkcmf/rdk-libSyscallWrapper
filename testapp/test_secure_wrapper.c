@@ -35,9 +35,16 @@ int main(/* int argc, char **argv */) {
 	char buf[1024];
 	memset(buf, 0, sizeof(buf));
 	fp = v_secure_popen("r", "echo popen read success");
-	buf[fread(buf, 1, sizeof(buf), fp)] = '\0';
-	fprintf(stdout, "%s", buf);
-	fclose(fp);
+	if (fp == NULL) {
+		printf("v_secure_popen failed\n");
+	} else {
+		if (fgets(buf, sizeof(buf), fp) == NULL) {
+		    printf("v_secure_popen read error\n");
+		} else {
+		    printf("%s", buf);
+		}
+		v_secure_pclose(fp);
+	}
 
 	secure_system_call_vp("echo", "legacy", "api", "PASS", NULL);
 

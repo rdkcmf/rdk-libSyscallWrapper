@@ -115,6 +115,7 @@ static int _vsnprintf(char *str, size_t size, const char *format, va_list *ap) {
 	va_list ap_copy;
 	va_copy(ap_copy, *ap);
 	int ret = vsnprintf(str, size, format, ap_copy);
+	va_end(ap_copy);
 
 	for (const char *ptr = format; *ptr; ptr++) {
 		if (ptr[0] == '%') {
@@ -133,17 +134,13 @@ static task **command_parser(const char *format, va_list *ap) {
 	int n_tasks = 0;
 	task **task_list = (task **)calloc(MAX_NUM_CMDS + 1, sizeof(task *));
 	task *current_task = new_task();
-	if (!task_list || !current_task) {
-		perror("malloc");
-		goto fail;
-	}
-
 	int n_args = 0;
 	int n_redirects = 2; // first two reserved for pipes
-	char temp[MAX_ARG_LEN + 1];
+	char temp[MAX_ARG_LEN * 2 + 1]; // stores a format string (* 2 since %% is two bytes but one character)
 
-	int i = 0; // input position
-	int o = 0; // output position (per arg)
+	int i = 0;  // input position
+	int o = 0;  // output position   (per arg)
+	int oc = 0; // output characters (per arg)
 
 	int redirect_token = 0;
 	enum {
@@ -159,8 +156,13 @@ static task **command_parser(const char *format, va_list *ap) {
 	} arg_processing = DEFAULT;
 	int match;
 
+	if (!task_list || !current_task) {
+		perror("malloc");
+		goto fail;
+	}
+
 	do {
-		if (o > MAX_ARG_LEN) {
+		if (oc > MAX_ARG_LEN) {
 			temp[MAX_ARG_LEN] = '\0';
 			FAIL("Argument too long: %s\n", temp);
 		}
@@ -194,7 +196,9 @@ static task **command_parser(const char *format, va_list *ap) {
 			case '\'': // single
 			case '\"': // double
 			{
-				int eval_start = o;
+				int eval_start   = o;
+				int eval_start_c = oc;
+
 				if (match == '`' && o > 0 && arg_processing != INPLACE) {
 					arg_processing = INPLACE;
 					break;
@@ -202,8 +206,14 @@ static task **command_parser(const char *format, va_list *ap) {
 
 				i++; // consume start quote
 
-				while (format[i] != '\0' && format[i] != match && o <= MAX_ARG_LEN) {
+				while (format[i] != '\0' && format[i] != match && oc <= MAX_ARG_LEN) {
 					temp[o++] = format[i++];
+					oc++;
+				}
+
+				if (oc > MAX_ARG_LEN) {
+					// error condition handled above
+					continue;
 				}
 
 				if (format[i] == '\0') {
@@ -212,14 +222,15 @@ static task **command_parser(const char *format, va_list *ap) {
 
 				i++; // consume end quote
 
-				if (o > MAX_ARG_LEN || match != '`') {
+				if (match != '`') {
 					arg_processing = NEW_ARG;
 					continue;
 				}
 
 				// eval
 				temp[o] = '\0';
-				o = eval_start;
+				o  = eval_start;
+				oc = eval_start_c;
 
 				if (!n_args) {
 					FAIL("Eval can't be first argument\n");
@@ -227,7 +238,7 @@ static task **command_parser(const char *format, va_list *ap) {
 
 				FILE *fp = v_secure_popen_internal("r", &temp[o], ap);
 				while ((match = fgetc(fp)) != EOF) {
-					if (o > MAX_ARG_LEN) {
+					if (oc > MAX_ARG_LEN) {
 						temp[MAX_ARG_LEN] = '\0';
 						FAIL("Argument too long: %s\n", temp);
 					}
@@ -241,6 +252,7 @@ static task **command_parser(const char *format, va_list *ap) {
 						case '\t':
 						case '\r':
 						case '\n':
+							// whitespace; check if anything follows and split into new arg
 							match = fgetc(fp);
 							if (o > 0 && match != EOF) {
 								temp[o] = '\0';
@@ -250,14 +262,16 @@ static task **command_parser(const char *format, va_list *ap) {
 								arg[MAX_ARG_LEN] = '\0';
 
 								current_task->argv[n_args++] = strdup(arg);
-								o = 0;
+								o = oc = 0;
 							}
 							ungetc(match, fp);
 							break;
 
-						case '%': temp[o++] = '%'; /* Fall */
-						default:  temp[o++] = match;
-							continue;
+						case '%':
+							temp[o++] = '%'; /* Fall */
+						default:
+							temp[o++] = match;
+							oc++;
 					}
 				}
 				fclose(fp);
@@ -315,7 +329,7 @@ static task **command_parser(const char *format, va_list *ap) {
 					}
 
 					// found fd, consume argument (restart the output buffer)
-					o = 0;
+					o = oc = 0;
 				} else if (redirect_fd == UNDEFINED) {
 					// assume fd based on direction
 					redirect_fd = (match == '<') ? 0 : 1;
@@ -368,6 +382,7 @@ static task **command_parser(const char *format, va_list *ap) {
 			// normal arguments
 			default:
 				temp[o++] = format[i++];
+				oc++;
 				continue;
 		}
 		// switch statement blocks until a full argument is parsed
@@ -376,10 +391,10 @@ static task **command_parser(const char *format, va_list *ap) {
 			temp[o] = '\0';
 
 			char arg[MAX_ARG_LEN + 1];
-			o = _vsnprintf(arg, sizeof(arg), temp, ap);
+			o = oc = _vsnprintf(arg, sizeof(arg), temp, ap);
 			arg[MAX_ARG_LEN] = '\0';
 
-			if (o > MAX_ARG_LEN) {
+			if (oc > MAX_ARG_LEN) {
 				FAIL("Argument too long: %s\n", arg);
 			}
 
@@ -390,11 +405,15 @@ static task **command_parser(const char *format, va_list *ap) {
 					break;
 
 				case INPLACE:
-					o = 0;
+					o = oc = 0;
 					for (char *c = arg; *c; c++) {
 						switch (*c) {
-							case '%': temp[o++] = '%'; /* Fall */
-							default:  temp[o++] = *c;
+							case '%':
+								temp[o++] = '%';
+								/* Fall */
+							default:
+								temp[o++] = *c;
+								oc++;
 						}
 					}
 					continue; // stay INPLACE
@@ -438,7 +457,7 @@ static task **command_parser(const char *format, va_list *ap) {
 				}
 			}
 
-			o = 0;
+			o = oc = 0;
 			arg_processing = DEFAULT;
 		}
 
@@ -693,7 +712,8 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 	}
 
 	// this is just to make sure we burn through the va_arg on the parent thread
-	char dummy[MAX_ARG_LEN + 1];
+	// since we're throwing the result away we can reduce this to minimum size
+	char dummy[1];
 	_vsnprintf(dummy, sizeof(dummy), format, ap);
 
 	cookie->pid = child_pid;
@@ -770,15 +790,15 @@ int secure_system_call_p(const char *cmd, char *argv[]) {
 int secure_system_call_vp(const char *cmd, ...) {
 	int ret = -1;
 
-	if (cmd == NULL) {
-		FAIL("NULL input given\n");
-	}
-
 	char *arg[MAX_NUM_ARGS + 1];
 
 	char *temp_arg;
 	int n_args = 0;
 	va_list ap;
+
+	if (cmd == NULL) {
+		FAIL("NULL input given\n");
+	}
 
 	arg[n_args++] = (char *)cmd;
 
@@ -794,6 +814,8 @@ int secure_system_call_vp(const char *cmd, ...) {
 	} while(temp_arg);
 
 	ret = secure_system_call_p(cmd, arg);
+
+	va_end(ap);
 fail:
 	return ret;
 }
