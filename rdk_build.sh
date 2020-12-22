@@ -53,7 +53,7 @@ export RDK_DIR=$RDK_PROJECT_ROOT_PATH
 if [ "$XCAM_MODEL" == "SCHC2" ]; then
         echo "Setting environmental variables and Pre rule makefile for xCam2"
 . ${RDK_PROJECT_ROOT_PATH}/build/components/amba/sdk/setenv2
-elif [ "$XCAM_MODEL" == "SERXW3" ] || [ "$XCAM_MODEL" == "SERICAM2" ] || [ "$XCAM_MODEL" == "XHB1" ]; then
+elif [ "$XCAM_MODEL" == "SERXW3" ] || [ "$XCAM_MODEL" == "SERICAM2" ] || [ "$XCAM_MODEL" == "XHB1" ] || [ "$XCAM_MODEL" == "XHC3" ]; then
         echo "Setting environmental variables and Pre rule makefile for xCam/iCam2/DBC"
 . ${RDK_PROJECT_ROOT_PATH}/build/components/sdk/setenv2
 else #No Matching platform
@@ -61,7 +61,7 @@ else #No Matching platform
 fi
 
 #SETTING CROSS COMPILER
-if [ "$XCAM_MODEL" == "SERXW3" ] || [ "$XCAM_MODEL" == "SERICAM2" ] || [ "$XCAM_MODEL" == "SCHC2" ]; then
+if [ "$XCAM_MODEL" == "SERXW3" ] || [ "$XCAM_MODEL" == "SERICAM2" ] || [ "$XCAM_MODEL" == "SCHC2" ] || [ "$XCAM_MODEL" == "XHC3" ]; then
   export CROSS_COMPILE=$RDK_TOOLCHAIN_PATH/bin/arm-linux-gnueabihf-
   export CC=${CROSS_COMPILE}gcc
   export CXX=${CROSS_COMPILE}g++
