@@ -832,11 +832,12 @@ typedef struct pstatus_t {
 } pstatus_t;
 
 pstatus_t *popen_list = NULL;
-
+static pthread_mutex_t  pstat_lock = PTHREAD_MUTEX_INITIALIZER;
 int v_secure_pclose(FILE *stream) {
 	int fd = fileno(stream);
 	pstatus_t *pstatus, **pp = &popen_list;
 
+        pthread_mutex_lock(&pstat_lock);
 	while (*pp && (*pp)->fd != fd) {
 		pp = &(*pp)->next;
 	}
@@ -845,6 +846,7 @@ int v_secure_pclose(FILE *stream) {
 
 	if (!pstatus) {
 		fprintf(stderr, "pclose failed to find fd\n");
+                pthread_mutex_unlock(&pstat_lock);
 		return -1;
 	}
 
@@ -866,6 +868,7 @@ int v_secure_pclose(FILE *stream) {
 	}
 
 	(*pp) = pstatus->next;
+        pthread_mutex_unlock(&pstat_lock);
 	free(pstatus);
 
 	return ret;
@@ -890,10 +893,12 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 		FAIL("shell failure");
 	}
 
+        pthread_mutex_lock(&pstat_lock);
 	child_pid = fork();
 	if (child_pid == -1) {
 		close(pipes[0]);
 		close(pipes[1]);
+                pthread_mutex_unlock(&pstat_lock);
 		FAIL("fork: %s\n", strerror(errno));
 
 	} else if (child_pid == 0) {
@@ -924,6 +929,7 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 
 	pstatus->next = popen_list;
 	popen_list = pstatus;
+        pthread_mutex_unlock(&pstat_lock);
 
 	return fdopen(pstatus->fd, direction);
 
