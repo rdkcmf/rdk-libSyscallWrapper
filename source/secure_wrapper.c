@@ -30,6 +30,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #ifdef WITH_RDKLOGGER
 #  include "rdk_debug.h"
@@ -178,7 +179,7 @@ static int fd_ops_adddup2(task *task, int srcfd, int fd) {
 	return 0;
 }
 
-static int apply_fd_ops(task *task) {
+static inline int apply_fd_ops(task *task) {
 	struct fd_ops_t *op;
 	int fd;
 	int ret = 0;
@@ -189,22 +190,30 @@ static int apply_fd_ops(task *task) {
 	for (op = task->fd_ops; op->next; op = op->next);
 	for (; op; op = op->prev) {
 		switch(op->cmd) {
-		case FD_OPS_CLOSE:
-			close(op->fd);
-			break;
-		case FD_OPS_DUP2:
-			if ((ret = dup2(op->srcfd, op->fd)) < 0)
-			goto fail;
-			break;
-		case FD_OPS_OPEN:
-			fd = open(op->path, op->oflag, op->mode);
-			if ((ret = fd) < 0) goto fail;
-			if (fd != op->fd) {
-				if ((ret = dup2(fd, op->fd)) < 0)
-					goto fail;
-				close(fd);
+			case FD_OPS_CLOSE:
+				close(op->fd);
+				break;
+			case FD_OPS_DUP2:
+				if (dup2(op->srcfd, op->fd) < 0) {
+					ret = -1;
+					FAIL("dup2: %s\n", strerror(errno));
+				}
+				break;
+			case FD_OPS_OPEN:
+			{
+				if ((fd = open(op->path, op->oflag, op->mode)) < 0) {
+					ret = -1;
+					FAIL("open: %s: %s\n", op->path, strerror(errno));
+				}
+				if (fd != op->fd) {
+					if (dup2(fd, op->fd) < 0) {
+						ret = -1;
+					}
+					close(fd);
+					if (ret) FAIL("dup2: %s: %s\n", op->path, strerror(errno));
+				}
+				break;
 			}
-			break;
 		}
 	}
 fail:
@@ -289,6 +298,7 @@ static parser_result command_parser(const char *format, va_list *ap) {
 
 			// subshell expression
 			case '(':
+			{
 				if (n_args) {
 					FAIL("Syntax error near unexpected '('\n");
 				}
@@ -303,7 +313,7 @@ static parser_result command_parser(const char *format, va_list *ap) {
 				i += result.bytes_consumed;
 				current_task->subshell = result.task_list;
 				break;
-
+			}
 			case ')':
 				i++;
 				current_task->token = SEMICOLON;
@@ -601,9 +611,9 @@ fail:
 	};
 }
 
-static int execute_task_list(task **task_list);
+static inline int execute_task_list(task **task_list);
 
-static int execute_task(task *current_task) {
+static int execute_task(task *current_task, int close_list[3]) {
 	char **argv = current_task->argv;
 	int ret = -1;
 
@@ -622,9 +632,15 @@ static int execute_task(task *current_task) {
 			FAIL("fork: %s\n", strerror(errno));
 
 		} else if (child_pid == 0) {
-			apply_fd_ops(current_task);
+			if (apply_fd_ops(current_task) == 0) {
+				for (int i=0; i<3; i++) {
+					int fd = close_list[i];
+					if (fd != -1) close(fd);
+				}
+				ret = execute_task_list(current_task->subshell);
+			}
 
-			_exit(execute_task_list(current_task->subshell));
+			_exit(ret);
 			/* noreturn */
 		}
 
@@ -647,10 +663,15 @@ static int execute_task(task *current_task) {
 	if (child_pid == -1) {
 		FAIL("fork: %s\n", strerror(errno));
 	} else if (child_pid == 0) {
-		apply_fd_ops(current_task);
+		if (apply_fd_ops(current_task) == 0) {
+			for (int i=0; i<3; i++) {
+				int fd = close_list[i];
+				if (fd != -1) close(fd);
+			}
+		}
 
-		ret = execvp(argv[0], argv);
-		fprintf(stderr, "%s: %s", argv[0], strerror(ret));
+		execvp(argv[0], argv);
+		fprintf(stderr, "%s: %s\n", argv[0], strerror(errno));
 
 		_exit(-1);
 		/* noreturn */
@@ -682,7 +703,7 @@ fail:
 	return ret;
 }
 
-static int execute_task_list(task **task_list) {
+static inline int execute_task_list(task **task_list) {
 	int ret = -1;
 
 	int skip = 0;    // short circuit evaluation when using AND, OR
@@ -691,15 +712,17 @@ static int execute_task_list(task **task_list) {
 	for (int n_tasks = 0; n_tasks < MAX_NUM_CMDS && task_list && task_list[n_tasks]; n_tasks++) {
 		task *current_task = task_list[n_tasks];
 		if (!skip) {
+			int close_list[3] = { -1, -1, -1 }; // old_std, old_stdout, pipes[0]
 
 			int old_stdin = -1;
 			if (pipefd != -1) {
+				// remap pipefd to stdin(0)
 				old_stdin = dup(0);
 				close(0);
 				dup2(pipefd, 0);
 				close(pipefd);
 
-				fd_ops_addclose(current_task, old_stdin);
+				close_list[0] = old_stdin;
 				pipefd = -1;
 			}
 
@@ -711,18 +734,18 @@ static int execute_task_list(task **task_list) {
 					FAIL("pipe: %s\n", strerror(errno));
 				}
 
+				// remap pipes[1] to stdout(1)
 				old_stdout = dup(1);
 				close(1);
 				dup2(pipes[1], 1);
 				close(pipes[1]);
 
-				fd_ops_addclose(current_task, old_stdout);
-				fd_ops_addclose(current_task, pipes[0]);
-
+				close_list[1] = old_stdout;
+				close_list[2] = pipes[0];
 				pipefd = pipes[0];
 			}
 
-			ret = execute_task(current_task);
+			ret = execute_task(current_task, close_list);
 
 			if (old_stdin != -1) {
 				close(0);
@@ -788,6 +811,7 @@ int v_secure_system(const char *format, ...) {
 
 	if (!task_list) {
 		FAIL("shell failure");
+
 	}
 
 	pid_t child_pid = vfork(); // can be a vfork
@@ -832,12 +856,13 @@ typedef struct pstatus_t {
 } pstatus_t;
 
 pstatus_t *popen_list = NULL;
+
 static pthread_mutex_t  pstat_lock = PTHREAD_MUTEX_INITIALIZER;
 int v_secure_pclose(FILE *stream) {
 	int fd = fileno(stream);
 	pstatus_t *pstatus, **pp = &popen_list;
 
-        pthread_mutex_lock(&pstat_lock);
+	pthread_mutex_lock(&pstat_lock);
 	while (*pp && (*pp)->fd != fd) {
 		pp = &(*pp)->next;
 	}
@@ -846,14 +871,13 @@ int v_secure_pclose(FILE *stream) {
 
 	if (!pstatus) {
 		fprintf(stderr, "pclose failed to find fd\n");
-                pthread_mutex_unlock(&pstat_lock);
+	        pthread_mutex_unlock(&pstat_lock);
 		return -1;
 	}
 
 	int ret = -1;
 
-	fflush(stream);
-	close(pstatus->fd);
+	fclose(stream);
 
 	int wstatus;
 	while (waitpid(pstatus->pid, &wstatus, 0) == -1) {
@@ -868,7 +892,7 @@ int v_secure_pclose(FILE *stream) {
 	}
 
 	(*pp) = pstatus->next;
-        pthread_mutex_unlock(&pstat_lock);
+	pthread_mutex_unlock(&pstat_lock);
 	free(pstatus);
 
 	return ret;
@@ -891,14 +915,15 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 	task **task_list = v_secure_system_internal(format, ap);
 	if (!task_list) {
 		FAIL("shell failure");
+
 	}
 
-        pthread_mutex_lock(&pstat_lock);
+	pthread_mutex_lock(&pstat_lock);
 	child_pid = fork();
 	if (child_pid == -1) {
 		close(pipes[0]);
 		close(pipes[1]);
-                pthread_mutex_unlock(&pstat_lock);
+	        pthread_mutex_unlock(&pstat_lock);
 		FAIL("fork: %s\n", strerror(errno));
 
 	} else if (child_pid == 0) {
@@ -929,7 +954,7 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 
 	pstatus->next = popen_list;
 	popen_list = pstatus;
-        pthread_mutex_unlock(&pstat_lock);
+	pthread_mutex_unlock(&pstat_lock);
 
 	return fdopen(pstatus->fd, direction);
 
