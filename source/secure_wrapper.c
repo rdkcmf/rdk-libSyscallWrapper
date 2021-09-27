@@ -914,6 +914,8 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 
 	task **task_list = v_secure_system_internal(format, ap);
 	if (!task_list) {
+                close(pipes[0]);
+                close(pipes[1]);
 		FAIL("shell failure");
 
 	}
@@ -923,6 +925,7 @@ static FILE *v_secure_popen_internal(const char *direction, const char *format, 
 	if (child_pid == -1) {
 		close(pipes[0]);
 		close(pipes[1]);
+                free_task_list(task_list);
 	        pthread_mutex_unlock(&pstat_lock);
 		FAIL("fork: %s\n", strerror(errno));
 
